@@ -1,0 +1,448 @@
+{  
+    "AWSTemplateFormatVersion":"2010-09-09",
+    "Description":"SAN multi-tenancy environment. Tenant specific infrastructure.",
+    "Parameters":{  
+        "AvailabilityZone1":{  
+            "Description":"Availability Zone",
+            "Type":"String",
+            "Default":"us-east-1a",
+            "AllowedValues":[  
+                "us-east-1a",
+                "us-east-1b",
+                "us-east-1c"
+            ]
+        },
+        "AvailabilityZone2":{  
+            "Description":"Availability Zone",
+            "Type":"String",
+            "Default":"us-east-1b",
+            "AllowedValues":[  
+                "us-east-1a",
+                "us-east-1b",
+                "us-east-1c"
+            ]
+            
+        },
+        "Environment":{  
+            "Description":"Environment",
+            "Type":"String",
+            "Default":"stage",
+            "AllowedValues":[  
+                "stage",
+                "prod",
+                "stress",
+                "local"
+            ]
+            
+        }
+            
+     },
+	
+	"Resources":{  
+        "VPC":{  
+            "Type":"AWS::EC2::VPC",
+            "Properties":{  
+                "CidrBlock":"10.0.0.0/16",
+                "EnableDnsSupport":true,
+                "EnableDnsHostnames":true,
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway":{  
+            "Type":"AWS::EC2::InternetGateway",
+            "Properties":{  
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway":{  
+            "Type":"AWS::EC2::VPCGatewayAttachment",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "InternetGatewayId":{  
+                    "Ref":"InternetGateway"
+                }
+            }
+        },
+        "NAT":{  
+            "DependsOn":"AttachGateway",
+            "Type":"AWS::EC2::NatGateway",
+            "Properties":{  
+                "AllocationId":{  
+                    "Fn::GetAtt":[  
+                        "EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId":{  
+                    "Ref":"PublicSubnet"
+                }
+            }
+        },
+        "EIP":{  
+            "Type":"AWS::EC2::EIP",
+            "Properties":{  
+                "Domain":"vpc"
+            }
+        },
+        "PublicSubnet":{  
+            "Type":"AWS::EC2::Subnet",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "AvailabilityZone":{  
+                    "Ref":"AvailabilityZone1"
+                },
+                "CidrBlock":"10.0.0.0/24",
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable":{  
+            "Type":"AWS::EC2::RouteTable",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute":{  
+            "Type":"AWS::EC2::Route",
+            "DependsOn":"AttachGateway",
+            "Properties":{  
+                "RouteTableId":{  
+                    "Ref":"PublicRouteTable"
+                },
+                "DestinationCidrBlock":"0.0.0.0/0",
+                "GatewayId":{  
+                    "Ref":"InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation":{  
+            "Type":"AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":{  
+                "SubnetId":{  
+                    "Ref":"PublicSubnet"
+                },
+                "RouteTableId":{  
+                    "Ref":"PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnetAZ2":{  
+            "Type":"AWS::EC2::Subnet",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "AvailabilityZone":{  
+                    "Ref":"AvailabilityZone2"
+                },
+                "CidrBlock":"10.0.5.0/24",
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTableAZ2":{  
+            "Type":"AWS::EC2::RouteTable",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteAZ2":{  
+            "Type":"AWS::EC2::Route",
+            "DependsOn":"AttachGateway",
+            "Properties":{  
+                "RouteTableId":{  
+                    "Ref":"PublicRouteTableAZ2"
+                },
+                "DestinationCidrBlock":"0.0.0.0/0",
+                "GatewayId":{  
+                    "Ref":"InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociationAZ2":{  
+            "Type":"AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":{  
+                "SubnetId":{  
+                    "Ref":"PublicSubnetAZ2"
+                },
+                "RouteTableId":{  
+                    "Ref":"PublicRouteTableAZ2"
+                }
+            }
+        },
+        "PrivateSubnetAZ1":{  
+            "Type":"AWS::EC2::Subnet",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "AvailabilityZone":{  
+                    "Ref":"AvailabilityZone1"
+                },
+                "CidrBlock":"10.0.1.0/24",
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableAZ1":{  
+            "Type":"AWS::EC2::RouteTable",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteAZ1":{  
+            "Type":"AWS::EC2::Route",
+            "DependsOn":"AttachGateway",
+            "Properties":{  
+                "RouteTableId":{  
+                    "Ref":"PrivateRouteTableAZ1"
+                },
+                "DestinationCidrBlock":"0.0.0.0/0",
+                "NatGatewayId":{  
+                    "Ref":"NAT"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociationAZ1":{  
+            "Type":"AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":{  
+                "SubnetId":{  
+                    "Ref":"PrivateSubnetAZ1"
+                },
+                "RouteTableId":{  
+                    "Ref":"PrivateRouteTableAZ1"
+                }
+            }
+        },
+        "PrivateSubnetAZ2":{  
+            "Type":"AWS::EC2::Subnet",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "AvailabilityZone":{  
+                    "Ref":"AvailabilityZone2"
+                },
+                "CidrBlock":"10.0.4.0/24",
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTableAZ2":{  
+            "Type":"AWS::EC2::RouteTable",
+            "Properties":{  
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "Tags":[  
+                    {  
+                        "Key":"Application",
+                        "Value":{  
+                            "Ref":"AWS::StackId"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteAZ2":{  
+            "Type":"AWS::EC2::Route",
+            "DependsOn":"AttachGateway",
+            "Properties":{  
+                "RouteTableId":{  
+                    "Ref":"PrivateRouteTableAZ2"
+                },
+                "DestinationCidrBlock":"0.0.0.0/0",
+                "NatGatewayId":{  
+                    "Ref":"NAT"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociationAZ2":{  
+            "Type":"AWS::EC2::SubnetRouteTableAssociation",
+            "Properties":{  
+                "SubnetId":{  
+                    "Ref":"PrivateSubnetAZ2"
+                },
+                "RouteTableId":{  
+                    "Ref":"PrivateRouteTableAZ2"
+                }
+            }
+        },
+        "VPCSecurityGroup":{  
+            "Type":"AWS::EC2::SecurityGroup",
+            "Properties":{  
+                "GroupName":{  
+                    "Fn::Join":[  
+                        "-",
+                        [  
+                            
+                            "vpc-sg"
+                        ]
+                    ]
+                },
+                "GroupDescription":"VPC security group",
+                "VpcId":{  
+                    "Ref":"VPC"
+                },
+                "SecurityGroupIngress":[  
+                    {  
+                        "IpProtocol":-1,
+                        "FromPort":"0",
+                        "ToPort":"65535",
+                        "CidrIp":"0.0.0.0/0"
+                    }
+                ]
+            }
+        }
+    },
+"Outputs": {
+        "VPCId": {
+            "Description": "VPCId of the newly created VPC",
+            "Value": {
+                "Ref": "VPC"
+            }
+        },
+        "NatGateway": {
+            "Description": "NAT gateway instance",
+            "Value": {
+                "Ref": "NAT"
+            }
+        },
+        "EIPAddress": {
+            "Description": "EIP allocated to NAT gateway",
+            "Value": {
+                "Ref": "EIP"
+            }
+        },
+        "PublicSubnet": {
+            "Description": "SubnetId of the public subnet",
+            "Value": {
+                "Ref": "PublicSubnet"
+            }
+        },
+		"PublicSubnetAZ2": {
+            "Description": "SubnetId of the public subnet",
+            "Value": {
+                "Ref": "PublicSubnetAZ2"
+            }
+        },
+        "PublicRouteTable": {
+            "Description": "Public route table",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            }
+        },
+		"PublicRouteTableAZ2": {
+            "Description": "Public route table",
+            "Value": {
+                "Ref": "PublicRouteTableAZ2"
+            }
+        },
+        "PrivateSubnetAZ1": {
+            "Description": "SubnetId of the public subnet",
+            "Value": {
+                "Ref": "PrivateSubnetAZ1"
+            }
+        },
+		"PrivateSubnetAZ2": {
+            "Description": "SubnetId of the public subnet",
+            "Value": {
+                "Ref": "PrivateSubnetAZ2"
+            }
+        },
+        "PrivateRouteTableAZ1": {
+            "Description": "Private subnet route table",
+            "Value": {
+                "Ref": "PrivateRouteTableAZ1"
+            }
+        },
+		
+		"PrivateRouteTableAZ2": {
+            "Description": "Private subnet route table",
+            "Value": {
+                "Ref": "PrivateRouteTableAZ2"
+            }
+        },
+        "VPCSecurityGroup": {
+            "Description": "SG for instances in the private subnet",
+            "Value": {
+                "Ref": "VPCSecurityGroup"
+            }
+        }
+ 
+    }
+}	
+	
+	
