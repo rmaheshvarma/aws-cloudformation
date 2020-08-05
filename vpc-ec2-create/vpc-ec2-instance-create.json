@@ -1,0 +1,156 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description" : "TTND AWS CloudFormation template to launch first instance",
+    "Parameters" : {
+
+        "KeyName" : {
+        "Description" : "EC2 Key Pair for SSH Access",
+		"Type": "AWS::EC2::KeyPair::KeyName",
+        "Default" : "sample",
+        "MinLength": "1",
+        "MaxLength": "64",
+        "AllowedPattern" : "[-_ a-zA-Z0-9]*",
+        "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
+        },
+        "InstanceType" : {
+            "Description" : "Instance1 EC2 instance type",
+            "Type" : "String",
+            "Default" : "t2.micro",
+            "AllowedValues" : [ "t2.micro","m4.small","m4.medium","m4.large","m4.xlarge","t2.large"],
+            "ConstraintDescription" : "must be a valid EC2 instance type."
+       }
+    },
+
+    "Mappings" : {
+	   "AWSInstanceType2Arch" : {
+         "t1.micro"    : { "Arch" : "HVM64"  },
+         "t2.nano"     : { "Arch" : "HVM64"  },
+         "t2.micro"    : { "Arch" : "HVM64"  },
+         "t2.small"    : { "Arch" : "HVM64"  }
+		 },
+		 
+		 "AWSRegionArch2AMI" : {
+           "us-east-1"        : {"HVM64" : "ami-0ff8a91507f77f867", "HVMG2" : "ami-0a584ac55a7631c0c"},
+           "us-west-2"        : {"HVM64" : "ami-a0cfeed8", "HVMG2" : "ami-0e09505bc235aa82d"},
+           "us-west-1"        : {"HVM64" : "ami-0bdb828fd58c52235", "HVMG2" : "ami-066ee5fd4a9ef77f1"},
+           "eu-west-1"        : {"HVM64" : "ami-047bb4163c506cd98", "HVMG2" : "ami-0a7c483d527806435"}
+		 }
+    },
+
+
+    "Resources" : {
+        "VPC" : {
+            "Type" : "AWS::EC2::VPC",
+            "Properties" : {
+              "CidrBlock" : "10.0.0.0/16",
+              "Tags" : [
+                {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+                { "Key": "Name", "Value": "Project_VPC"},
+                {"Key" : "Network", "Value" : "Public" }
+              ]
+            }
+          },
+
+        "PublicSubnet" : {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+              "VpcId" : { "Ref" : "VPC" },
+              "CidrBlock" : "10.0.0.0/24",
+              "Tags" : [
+                {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+                {"Key" : "Network", "Value" : "Public" },
+                { "Key": "Name", "Value": "Project_Public_Subnet"}
+              ]
+            }
+          },
+
+        "InternetGateway" : {
+            "Type" : "AWS::EC2::InternetGateway",
+            "Properties" : {
+              "Tags" : [
+                {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+                {"Key" : "Network", "Value" : "Public" },
+                { "Key": "Name", "Value": "Project_Internetgateway"}
+              ]
+            }
+          },
+        "AttachGateway" : {
+            "Type" : "AWS::EC2::VPCGatewayAttachment",
+            "Properties" : {
+              "VpcId" : { "Ref" : "VPC" },
+              "InternetGatewayId" : { "Ref" : "InternetGateway" }
+            }
+         },
+
+        "PublicRouteTable" : {
+            "Type" : "AWS::EC2::RouteTable",
+            "Properties" : {
+              "VpcId" : {"Ref" : "VPC"},
+              "Tags" : [
+                {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+                {"Key" : "Network", "Value" : "Public" },
+                { "Key": "Name", "Value": "cloudwords_public_routetable"}
+              ]
+            }
+          },
+
+          "PublicSubnetRouteTableAssociation" : {
+             "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+             "Properties" : {
+               "SubnetId" : { "Ref" : "PublicSubnet" },
+               "RouteTableId" : { "Ref" : "PublicRouteTable" }
+            }
+          },
+        
+          "InstanceSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+              "GroupDescription" : "Enable HTTP access",
+              "VpcId" : { "Ref" : "VPC" },
+              "SecurityGroupIngress" : [ { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : "0.0.0.0/0"},
+                                         { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"} ],
+              "Tags" : [
+              {"Key": "Name", "Value": "Project_EC2_sg"}
+               ]
+            }},
+
+            "Instance" : {
+                "Type" : "AWS::EC2::Instance",
+                "Properties" : {
+                  "KeyName" : { "Ref" : "KeyName" },
+                  "InstanceType" : { "Ref" : "InstanceType" },
+                  "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                                    { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" },
+                                                    "Arch" ] } ] },
+                                                    "NetworkInterfaces" : [
+                                                      { "DeviceIndex" : "0",
+                                                        "AssociatePublicIpAddress" : "true",
+                                                        "DeleteOnTermination" : "true",
+                                                        "SubnetId" : { "Ref" : "PublicSubnet" },
+                                                        "GroupSet" : [ { "Ref" : "InstanceSecurityGroup" } ]
+                                                      }
+                                                    ],
+                  "Tags" : [
+                  {"Key": "Name", "Value": "Project_Instance"}
+                   ],
+                   "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+                "#!/bin/bash -ex\n",
+                "apt-get update"
+              ]]}}
+                }}
+          
+    },   
+    "Outputs" : {
+        "InstanceId" : {
+        "Description" : "InstanceId of the newly created Mysql instance",
+        "Value" : { "Ref" : "Instance" }
+        },
+        "WebUrl" : {
+        "Description" : "This is the endpoint of application.",
+        "Value" : { "Fn::Join" : [ "", [ "https://", { "Fn::GetAtt" : [ "Instance", "PublicIp"] } , ":8444" ] ] }
+        }
+    }
+}
+
+
+
